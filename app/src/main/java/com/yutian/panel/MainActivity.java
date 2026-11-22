@@ -54,12 +54,12 @@ public class MainActivity extends Activity {
     /** GitHub Pages（主线路）。 */
     private static final String PANEL_PAGES =
             "https://3107281840.github.io/yutian-panel/panel/index.html";
-    /** jsDelivr（国内通常更快，GitHub 源站）。 */
+    /** jsDelivr 的 gcore 节点（cdn.jsdelivr.net 在部分网络下不通）。 */
     private static final String PANEL_CDN =
-            "https://cdn.jsdelivr.net/gh/3107281840/yutian-panel@main/panel/index.html";
-    /** ghproxy 转发的 raw 地址（前两条都不通时兜底）。 */
+            "https://gcore.jsdelivr.net/gh/3107281840/yutian-panel@main/panel/index.html";
+    /** jsDelivr 的 Cloudflare 节点，最后兜底。 */
     private static final String PANEL_RAW =
-            "https://ghproxy.net/https://raw.githubusercontent.com/3107281840/yutian-panel/main/panel/index.html";
+            "https://testingcf.jsdelivr.net/gh/3107281840/yutian-panel@main/panel/index.html";
 
     private static final String[] PANEL_URLS = {PANEL_PAGES, PANEL_CDN, PANEL_RAW};
 
