@@ -42,6 +42,9 @@ public class MainActivity extends Activity {
     private static final int REQ_FILE_CHOOSER = 1001;
     private static final int REQ_GEO_PERMISSION = 1002;
 
+    private volatile boolean inBackground;
+    private volatile long backgroundSince;
+
     private WebView webView;
     private AssetServer assetServer;
     private ValueCallback<Uri[]> fileCallback;
@@ -340,6 +343,35 @@ public class MainActivity extends Activity {
         } else {
             super.onBackPressed();
         }
+    }
+
+    boolean isInBackground() {
+        return inBackground;
+    }
+
+    long backgroundSince() {
+        return backgroundSince;
+    }
+
+    void requestLocationPermission() {
+        if (checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION)
+                != PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(new String[]{Manifest.permission.ACCESS_FINE_LOCATION},
+                    REQ_GEO_PERMISSION);
+        }
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        inBackground = false;
+    }
+
+    @Override
+    protected void onPause() {
+        super.onPause();
+        inBackground = true;
+        backgroundSince = System.currentTimeMillis();
     }
 
     @Override

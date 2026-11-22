@@ -33,10 +33,15 @@ MainActivity
 | http/https 下载（走系统 DownloadManager） | ✅ |
 | 定位授权（网页 geolocation） | ✅ |
 | GitHub Releases 应用内更新检查 | ✅ |
+| GPS 实时速度（`begin/poll/endGpsSpeed`） | ✅ 1.1.0 |
+| 面板截图/图片导出到相册（`imageExport`） | ✅ 1.1.0 |
+| 应用日志落盘（`beginAppLog` / `appLogSession`） | ✅ 1.1.0 |
+| 通知渠道查询与开关（`notifyGroups` / `setNotifyGroup`） | ✅ 1.1.0 |
+| 前后台状态（`background` / `backgroundStatus`） | ✅ 1.1.0 |
 
-下面这些需要厂商私有协议或系统级组件，当前壳**没有实现**，面板会按「当前 App 未提供所需的原生能力」自己降级，不会假装成功：
+`ZeehoShell` 现在按原版 `ShellBridge` 注册了全部 **142 个方法名**（另加 `ZeehoCast` 投屏命名空间），页面探测方法存在性时不会再误判。其中真正实现的在上面这张表里；剩下这些依赖厂商私有协议或系统级组件，调用时统一返回 `{"ok":false,"error":"unsupported"}`，面板会明确降级，不会假装成功：
 
-蓝牙感应钥匙 / 车辆 P2P 投屏 / 车机壁纸直传 / 桌面小组件 / 仪表 OTA / 后台连续采样 / 原生码表。
+蓝牙感应钥匙 / 车辆 P2P 投屏 / 车机壁纸直传 / 桌面小组件 / 仪表 OTA / AE4 控制器写入 / 骑行记录与自动抓拍 / 电池与充电历史 / 后台保活 / 网页热更新。
 
 ## 目录
 
