@@ -28,6 +28,11 @@ MainActivity
 
 首页会按 `ETag` 缓存到应用缓存目录：有更新才重新下载，离线时还能用上一次的 HTML 启动。
 
+
+## 解混淆参考源码
+
+`panel/index-readable.html` 和 `panel/readable/*.js` 是面板 10 个混淆 bundle 的反混淆结果（字符串已还原、`_0x` 变量已重命名），仅供阅读和改功能参考；**App 仍加载 `panel/index.html`**，不会用这个参考版。生成方式和限制见 `panel/readable/README.md`。
+
 ## 已经对接的能力
 
 | 能力 | 状态 |
