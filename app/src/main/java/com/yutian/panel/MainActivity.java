@@ -13,7 +13,9 @@ import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
+import android.view.Gravity;
 import android.view.View;
+import android.view.ViewGroup;
 import android.webkit.CookieManager;
 import android.webkit.GeolocationPermissions;
 import android.webkit.JsResult;
@@ -21,32 +23,57 @@ import android.webkit.PermissionRequest;
 import android.webkit.URLUtil;
 import android.webkit.ValueCallback;
 import android.webkit.WebChromeClient;
+import android.webkit.WebResourceError;
 import android.webkit.WebResourceRequest;
+import android.webkit.WebResourceResponse;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
+import android.widget.Button;
 import android.widget.FrameLayout;
+import android.widget.LinearLayout;
+import android.widget.TextView;
 import android.widget.Toast;
 
+import java.io.ByteArrayInputStream;
 import java.util.Locale;
 
 /**
  * 雨天面板：一个只做壳的原生容器。
  *
- * H5 面板（极核车主面板的网页整包）放在 assets/panel 里，由 AssetServer 通过
- * 127.0.0.1 暴露；原生这边只保留系统级能力（主题、常亮、分享、剪贴板、下载、更新），
- * 车辆数据、账号、3D 模型仍然走网页自己的逻辑。
+ * 面板网页不再打进 APK，而是每次从自己的 GitHub 仓库拉取：
+ * GitHub Pages 优先，jsDelivr 和 ghproxy 兜底。
+ * 原生侧只保留系统能力（主题、常亮、分享、剪贴板、下载、更新），
+ * 车辆数据、账号、3D 模型仍走网页自己的逻辑。
  */
 public class MainActivity extends Activity {
 
     private static final int REQ_FILE_CHOOSER = 1001;
     private static final int REQ_GEO_PERMISSION = 1002;
 
+    /** GitHub Pages（主线路）。 */
+    private static final String PANEL_PAGES =
+            "https://3107281840.github.io/yutian-panel/panel/index.html";
+    /** jsDelivr（国内通常更快，GitHub 源站）。 */
+    private static final String PANEL_CDN =
+            "https://cdn.jsdelivr.net/gh/3107281840/yutian-panel@main/panel/index.html";
+    /** ghproxy 转发的 raw 地址（前两条都不通时兜底）。 */
+    private static final String PANEL_RAW =
+            "https://ghproxy.net/https://raw.githubusercontent.com/3107281840/yutian-panel/main/panel/index.html";
+
+    private static final String[] PANEL_URLS = {PANEL_PAGES, PANEL_CDN, PANEL_RAW};
+
     private volatile boolean inBackground;
     private volatile long backgroundSince;
+    private volatile boolean switching;
 
     private WebView webView;
-    private AssetServer assetServer;
+    private FrameLayout root;
+    private LinearLayout errorView;
+    private TextView errorText;
+    private String pageUrl = PANEL_URLS[0];
+    private int sourceIndex = 0;
+
     private ValueCallback<Uri[]> fileCallback;
     private GeolocationPermissions.Callback geoCallback;
     private String geoOrigin;
@@ -58,28 +85,86 @@ public class MainActivity extends Activity {
         getWindow().setStatusBarColor(Color.parseColor("#0A0A0C"));
         getWindow().setNavigationBarColor(Color.parseColor("#0A0A0C"));
 
-        FrameLayout container = new FrameLayout(this);
-        container.setBackgroundColor(Color.parseColor("#0A0A0C"));
+        root = new FrameLayout(this);
+        root.setBackgroundColor(Color.parseColor("#0A0A0C"));
         webView = new WebView(this);
-        container.addView(webView, new FrameLayout.LayoutParams(
-                FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
-        setContentView(container);
+        root.addView(webView, new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        buildErrorView();
+        setContentView(root);
 
         configureWebView();
-
-        try {
-            assetServer = new AssetServer(getAssets(), "panel");
-            assetServer.start();
-        } catch (Exception e) {
-            Toast.makeText(this, "面板资源启动失败：" + e.getMessage(), Toast.LENGTH_LONG).show();
-            finish();
-            return;
-        }
-
-        String url = "http://127.0.0.1:" + assetServer.getPort() + "/index.html";
-        webView.loadUrl(url);
+        loadSource(0);
 
         UpdateChecker.maybeCheck(this);
+    }
+
+    private void buildErrorView() {
+        errorView = new LinearLayout(this);
+        errorView.setOrientation(LinearLayout.VERTICAL);
+        errorView.setGravity(Gravity.CENTER);
+        errorView.setBackgroundColor(Color.parseColor("#0A0A0C"));
+        errorView.setPadding(48, 48, 48, 48);
+        errorView.setVisibility(View.GONE);
+
+        TextView title = new TextView(this);
+        title.setText("面板加载失败");
+        title.setTextColor(Color.WHITE);
+        title.setTextSize(20);
+        title.setGravity(Gravity.CENTER);
+        errorView.addView(title);
+
+        errorText = new TextView(this);
+        errorText.setText("请检查网络后重试。\n面板从 GitHub 在线拉取，首次打开需要联网。");
+        errorText.setTextColor(Color.parseColor("#B8B8C0"));
+        errorText.setTextSize(14);
+        errorText.setGravity(Gravity.CENTER);
+        errorText.setPadding(0, 18, 0, 28);
+        errorView.addView(errorText);
+
+        Button retry = new Button(this);
+        retry.setText("重试");
+        retry.setOnClickListener(v -> loadSource(0));
+        errorView.addView(retry);
+
+        root.addView(errorView, new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+    }
+
+    private void loadSource(int index) {
+        if (index >= PANEL_URLS.length) {
+            showError();
+            return;
+        }
+        sourceIndex = index;
+        pageUrl = PANEL_URLS[index];
+        switching = false;
+        errorView.setVisibility(View.GONE);
+        webView.setVisibility(View.VISIBLE);
+        webView.loadUrl(pageUrl);
+    }
+
+    private void nextSource() {
+        if (switching) {
+            return;
+        }
+        switching = true;
+        runOnUiThread(() -> {
+            switching = false;
+            if (sourceIndex + 1 < PANEL_URLS.length) {
+                loadSource(sourceIndex + 1);
+            } else {
+                showError();
+            }
+        });
+    }
+
+    private void showError() {
+        runOnUiThread(() -> {
+            errorText.setText("三条线路都没有连上。\n请检查网络或代理后重试。");
+            errorView.setVisibility(View.VISIBLE);
+            webView.setVisibility(View.GONE);
+        });
     }
 
     @SuppressWarnings("SetJavaScriptEnabled")
@@ -110,6 +195,57 @@ public class MainActivity extends Activity {
         webView.addJavascriptInterface(new ShellBridge(this, webView), "ZeehoNative");
 
         webView.setWebViewClient(new WebViewClient() {
+            @Override
+            public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
+                try {
+                    if (request.isForMainFrame()
+                            && pageUrl != null
+                            && pageUrl.equals(request.getUrl().toString())) {
+                        byte[] html = PanelLoader.loadIndex(MainActivity.this, pageUrl);
+                        if (html != null) {
+                            return new WebResourceResponse("text/html", "UTF-8",
+                                    new ByteArrayInputStream(html));
+                        }
+                    }
+                } catch (Throwable ignored) {
+                }
+                return null;
+            }
+
+            @Override
+            public void onPageStarted(WebView view, String url, android.graphics.Bitmap favicon) {
+                if (url != null && url.contains("download.html")
+                        && sourceIndex < PANEL_URLS.length) {
+                    // 桥注入失败时面板会把自己当成普通浏览器跳到下载页，这里直接换下一条线路。
+                    nextSource();
+                }
+            }
+
+            @Override
+            public void onPageFinished(WebView view, String url) {
+                if (errorView != null && errorView.getVisibility() == View.VISIBLE) {
+                    errorView.setVisibility(View.GONE);
+                    webView.setVisibility(View.VISIBLE);
+                }
+            }
+
+            @Override
+            public void onReceivedError(WebView view, WebResourceRequest request,
+                                        WebResourceError error) {
+                if (request != null && request.isForMainFrame()) {
+                    nextSource();
+                }
+            }
+
+            @Override
+            public void onReceivedHttpError(WebView view, WebResourceRequest request,
+                                            WebResourceResponse response) {
+                if (request != null && request.isForMainFrame()
+                        && response != null && response.getStatusCode() >= 400) {
+                    nextSource();
+                }
+            }
+
             @Override
             public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
                 return handleUri(request.getUrl());
@@ -221,12 +357,13 @@ public class MainActivity extends Activity {
         String host = uri.getHost() == null ? "" : uri.getHost().toLowerCase(Locale.ROOT);
 
         if ("http".equals(scheme) || "https".equals(scheme)) {
-            if (host.equals("127.0.0.1") || host.equals("localhost")) {
-                return false;
-            }
-            if (host.endsWith("zeehoev.com") || host.endsWith("cfmoto.com")
-                    || host.endsWith("cfmoto.oss-cn-hangzhou.aliyuncs.com")
-                    || host.endsWith("jsdelivr.net") || host.endsWith("githubusercontent.com")) {
+            if (host.equals("3107281840.github.io")
+                    || host.endsWith("jsdelivr.net")
+                    || host.endsWith("ghproxy.net")
+                    || host.endsWith("githubusercontent.com")
+                    || host.endsWith("zeehoev.com")
+                    || host.endsWith("cfmoto.com")
+                    || host.endsWith("aliyuncs.com")) {
                 return false;
             }
             openExternal(uri);
@@ -376,9 +513,6 @@ public class MainActivity extends Activity {
 
     @Override
     protected void onDestroy() {
-        if (assetServer != null) {
-            assetServer.stop();
-        }
         if (webView != null) {
             webView.loadUrl("about:blank");
             webView.destroy();

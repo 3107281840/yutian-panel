@@ -1,11 +1,14 @@
 # 雨天面板
 
-极核（ZEEHO）车主面板 H5 的安卓外壳。原作者的 App 已经从分发渠道撤掉，这个仓库重新做了一个原生容器，把完整的 H5 整包内置进 APK，装上就能用，不再依赖原作者的下载页。
+极核（ZEEHO）车主面板 H5 的安卓外壳。**APK 不内置面板**：启动时从本仓库的 GitHub Pages / jsDelivr 在线拉取，网页更新后不用重新装 APK。
 
 - 应用名：**雨天面板**
 - 包名：`com.yutian.panel`
-- 内置面板：`app/src/main/assets/panel/`（H5 整包 + 车模资源）
-- 更新方式：GitHub Actions 构建 → 发布 Release → App 启动时自动检查并提示更新
+- 面板在线地址：
+  - GitHub Pages：<https://3107281840.github.io/yutian-panel/panel/index.html>
+  - jsDelivr：`https://cdn.jsdelivr.net/gh/3107281840/yutian-panel@main/panel/index.html`
+  - 兜底：`https://ghproxy.net/https://raw.githubusercontent.com/3107281840/yutian-panel/main/panel/index.html`
+- 车模与网页源码：仓库根目录 `panel/`（与作者 H5 整包一致）
 
 > 本项目只是个人自用的第三方壳，与极核官方无关；面板网页与车模的作者、版权归原各自所有者。
 
@@ -13,13 +16,16 @@
 
 ```
 MainActivity
-  └─ AssetServer（127.0.0.1 上的只读 HTTP 服务）
-        └─ assets/panel/index.html   ← 面板网页
+  ├─ 依次尝试：GitHub Pages → jsDelivr → ghproxy
+  │     └─ PanelLoader 拉 index.html，注入桥脚本后交给 WebView
+  │     └─ 车模 / 图片 / JSON 仍由 WebView 从同一个源直接加载（保持同源）
   └─ ZeehoNative（@JavascriptInterface）
-        └─ 注入的 ZeehoShell / ZeehoShellTxn 桥
+        └─ BridgeScript 把它包装成面板要的 ZeehoShell / ZeehoShellTxn / ZeehoCast
 ```
 
-面板是 PWA，靠 `fetch`、`localStorage` 和同源相对路径吃饭，`file://` 会被 CORS 拦掉，所以壳里起了一个只监听回环地址的小 HTTP 服务，把 APK 里的 `assets/panel` 原样吐给 WebView。网页里的平台闸门只认真实的原生桥，因此启动前会注入 `ZeehoShell` 和 `ZeehoShellTxn`，让面板按 Android 原生模式运行，而不是掉进「UI 测试预览」。
+面板是 PWA，靠 `fetch`、`localStorage` 和同源相对路径吃饭。平台闸门在 `<head>` 的内联脚本里就会执行，所以必须在它之前注入 `ZeehoShell`，否则会被当成普通浏览器跳到下载页。`PanelLoader` 拦下主文档请求、在 `<head>` 最前面插入 `BridgeScript`，其余请求不拦截——这样网页 origin 仍是自己的 GitHub 域名，登录态和接口 CORS 都正常。
+
+首页会按 `ETag` 缓存到应用缓存目录：有更新才重新下载，离线时还能用上一次的 HTML 启动。
 
 ## 已经对接的能力
 
@@ -33,28 +39,47 @@ MainActivity
 | http/https 下载（走系统 DownloadManager） | ✅ |
 | 定位授权（网页 geolocation） | ✅ |
 | GitHub Releases 应用内更新检查 | ✅ |
-| GPS 实时速度（`begin/poll/endGpsSpeed`） | ✅ 1.1.0 |
-| 面板截图/图片导出到相册（`imageExport`） | ✅ 1.1.0 |
-| 应用日志落盘（`beginAppLog` / `appLogSession`） | ✅ 1.1.0 |
-| 通知渠道查询与开关（`notifyGroups` / `setNotifyGroup`） | ✅ 1.1.0 |
-| 前后台状态（`background` / `backgroundStatus`） | ✅ 1.1.0 |
+| GPS 实时速度（`begin/poll/endGpsSpeed`） | ✅ |
+| 面板截图/图片导出到相册（`imageExport`） | ✅ |
+| 应用日志落盘（`beginAppLog` / `appLogSession`） | ✅ |
+| 通知渠道查询与开关（`notifyGroups` / `setNotifyGroup`） | ✅ |
+| 前后台状态（`background` / `backgroundStatus`） | ✅ |
 
-`ZeehoShell` 现在按原版 `ShellBridge` 注册了全部 **142 个方法名**（另加 `ZeehoCast` 投屏命名空间），页面探测方法存在性时不会再误判。其中真正实现的在上面这张表里；剩下这些依赖厂商私有协议或系统级组件，调用时统一返回 `{"ok":false,"error":"unsupported"}`，面板会明确降级，不会假装成功：
-
-蓝牙感应钥匙 / 车辆 P2P 投屏 / 车机壁纸直传 / 桌面小组件 / 仪表 OTA / AE4 控制器写入 / 骑行记录与自动抓拍 / 电池与充电历史 / 后台保活 / 网页热更新。
+`ZeehoShell` 按原版 `ShellBridge` 注册了全部 **142 个方法名**（另加 `ZeehoCast` 投屏命名空间），页面探测方法存在性时不会再误判。真正实现的在上面这张表里；其余依赖厂商私有协议或系统级组件的调用统一返回 `{"ok":false,"error":"unsupported"}`，面板会明确降级，不会假装成功：蓝牙感应钥匙 / 车辆 P2P 投屏 / 车机壁纸直传 / 桌面小组件 / 仪表 OTA / AE4 控制器写入 / 骑行记录与自动抓拍 / 电池与充电历史 / 后台保活 / 网页热更新。
 
 ## 目录
 
 ```
+panel/                        面板 H5 整包（index.html / models / icons ...）
+index.html                    Pages 根入口，跳到 panel/
 app/src/main/java/com/yutian/panel/
-  MainActivity.java      WebView、权限、文件选择、下载、返回键
-  AssetServer.java       回环 HTTP + 桥脚本注入 + Range 支持
-  ShellBridge.java       ZeehoNative 的方法分发（白名单）
-  UpdateChecker.java     GitHub Releases 检查与下载
-app/src/main/assets/panel/   面板 H5 整包（index.html / models / icons ...）
-keystore/yutian.jks          固定签名，保证每次构建都能覆盖安装
-.github/workflows/build.yml  自动构建 + 发 Release
+  MainActivity.java           WebView、三条线路回退、权限、文件选择、下载、返回键
+  PanelLoader.java            在线拉取首页、ETag 缓存、注入桥脚本
+  BridgeScript.java           ZeehoNative → ZeehoShell / ZeehoShellTxn / ZeehoCast
+  ShellBridge.java            ZeehoNative 的方法分发（白名单）
+  UpdateChecker.java          GitHub Releases 检查与下载
+keystore/yutian.jks           固定签名，保证每次构建都能覆盖安装
+.github/workflows/build.yml   自动构建 + 发 Release
 ```
+
+## 换面板网页
+
+把新的 H5 整包解压后覆盖 `panel/`（保留 `index.html` 这个名字），提交推送即可，手机上下次启动自动拉到新页面。
+
+- GitHub Pages 推送后通常 1～2 分钟生效；
+- jsDelivr 的 `@main` 有约 12 小时缓存，想立刻刷新可在 <https://purge.jsdelivr.net/> 填 `gh/3107281840/yutian-panel@main/panel/index.html` 清缓存；
+- App 内的 ETag 缓存会在 Pages/jsDelivr 更新后自动失效。
+
+## 改版本、发新版
+
+编辑根目录 `gradle.properties`：
+
+```properties
+VERSION_CODE=4
+VERSION_NAME=1.2.1
+```
+
+推到 `main` 后 Actions 会构建并发布 `v1.2.1` 的 Release，老版本 App 下次启动就能收到更新提示。
 
 ## 本地构建
 
@@ -64,48 +89,6 @@ keystore/yutian.jks          固定签名，保证每次构建都能覆盖安装
 echo "sdk.dir=/path/to/android-sdk" > local.properties
 ./gradlew assembleRelease
 # 产物：app/build/outputs/apk/release/app-release.apk
-```
-
-## 用 GitHub Actions 自动构建
-
-仓库里已经准备好工作流模板 `tools/github-workflow-build.yml`。启用只需一次（网页端 30 秒）：
-
-1. 在 GitHub 仓库页面点 `Add file` → `Create new file`；
-2. 文件名填 `.github/workflows/build.yml`；
-3. 把 `tools/github-workflow-build.yml` 的内容整段粘进去，提交。
-
-> 为什么没有直接推上去：当前登录用的 OAuth App 没有 `workflow` 权限，GitHub 会拒绝推送 `.github/workflows/*`。你也可以在授权里补上 `workflow` scope 后自己 `git push`。
-
-启用之后，推到 `main` 就会自动：
-
-1. 用 Gradle 7.6.4 + JDK 17 构建 `assembleRelease`；
-2. 把 APK 上传成 Actions artifact；
-3. 以 `v{versionName}` 为 tag 建一个 Release，附上 `yutian-panel.apk`。
-
-App 启动时会读 `https://api.github.com/repos/<GH_OWNER>/<GH_REPO>/releases/latest`，发现 tag 比当前版本新就弹窗提示下载，走系统下载器安装。当前仓库已经手工发过 `v1.0.0`，应用内更新链路是通的。
-
-## 改版本、发新版
-
-编辑根目录 `gradle.properties`：
-
-```properties
-VERSION_CODE=2
-VERSION_NAME=1.0.1
-```
-
-提交推送即可，Actions 会发 `v1.0.1` 的 Release，老版本 App 下次启动就能收到更新提示。
-
-## 换面板网页
-
-把新的 H5 整包解压后覆盖 `app/src/main/assets/panel/`（保留 `index.html` 这个名字），重新构建即可。桥脚本是运行时注入的，不需要改网页本身。
-
-## 换成你自己的仓库
-
-`gradle.properties` 里改这两行，应用内更新就会指向你的仓库：
-
-```properties
-GH_OWNER=你的GitHub用户名
-GH_REPO=你的仓库名
 ```
 
 ## 签名说明

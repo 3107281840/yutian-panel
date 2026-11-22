@@ -55,7 +55,7 @@ jobs:
           body: |
             雨天面板 v${{ env.VERSION }}
 
-            内置极核面板 H5 整包，安装即用。
+            从 GitHub 在线拉取极核面板 H5，APK 只保留原生壳。
           files: dist/yutian-panel.apk
           make_latest: true
         env:
