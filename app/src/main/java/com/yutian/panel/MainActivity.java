@@ -53,19 +53,25 @@ public class MainActivity extends Activity {
 
     /** 国内可解析的 jsDelivr 镜像（主线路）。 */
     private static final String PANEL_MIRROR =
-            "https://cdn.jsdmirror.com/gh/3107281840/yutian-panel@main/panel/index.html";
+            "https://cdn.jsdmirror.com/gh/3107281840/yutian-panel@main/panel/index.html?v=6";
     /** GitHub Pages。 */
     private static final String PANEL_PAGES =
-            "https://3107281840.github.io/yutian-panel/panel/index.html";
+            "https://3107281840.github.io/yutian-panel/panel/index.html?v=6";
     /** jsDelivr gcore 节点。 */
     private static final String PANEL_GCORE =
-            "https://gcore.jsdelivr.net/gh/3107281840/yutian-panel@main/panel/index.html";
-    /** jsDelivr Fastly 节点，最后兜底（较慢）。 */
+            "https://gcore.jsdelivr.net/gh/3107281840/yutian-panel@main/panel/index.html?v=6";
+    /** jsDelivr Fastly 节点。 */
     private static final String PANEL_FASTLY =
-            "https://fastly.jsdelivr.net/gh/3107281840/yutian-panel@main/panel/index.html";
+            "https://fastly.jsdelivr.net/gh/3107281840/yutian-panel@main/panel/index.html?v=6";
+    /** 原始 jsDelivr。 */
+    private static final String PANEL_JSDELIVR =
+            "https://cdn.jsdelivr.net/gh/3107281840/yutian-panel@main/panel/index.html?v=6";
+    /** ghproxy 转发的 raw。 */
+    private static final String PANEL_RAW =
+            "https://ghproxy.net/https://raw.githubusercontent.com/3107281840/yutian-panel/main/panel/index.html?v=6";
 
     private static final String[] PANEL_URLS = {
-            PANEL_MIRROR, PANEL_PAGES, PANEL_GCORE, PANEL_FASTLY};
+            PANEL_MIRROR, PANEL_PAGES, PANEL_GCORE, PANEL_FASTLY, PANEL_JSDELIVR, PANEL_RAW};
 
     private volatile boolean inBackground;
     private volatile long backgroundSince;
