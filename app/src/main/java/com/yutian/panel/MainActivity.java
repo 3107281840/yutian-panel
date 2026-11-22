@@ -51,17 +51,21 @@ public class MainActivity extends Activity {
     private static final int REQ_FILE_CHOOSER = 1001;
     private static final int REQ_GEO_PERMISSION = 1002;
 
-    /** GitHub Pages（主线路）。 */
+    /** 国内可解析的 jsDelivr 镜像（主线路）。 */
+    private static final String PANEL_MIRROR =
+            "https://cdn.jsdmirror.com/gh/3107281840/yutian-panel@main/panel/index.html";
+    /** GitHub Pages。 */
     private static final String PANEL_PAGES =
             "https://3107281840.github.io/yutian-panel/panel/index.html";
-    /** jsDelivr 的 gcore 节点（cdn.jsdelivr.net 在部分网络下不通）。 */
-    private static final String PANEL_CDN =
+    /** jsDelivr gcore 节点。 */
+    private static final String PANEL_GCORE =
             "https://gcore.jsdelivr.net/gh/3107281840/yutian-panel@main/panel/index.html";
-    /** jsDelivr 的 Cloudflare 节点，最后兜底。 */
-    private static final String PANEL_RAW =
-            "https://testingcf.jsdelivr.net/gh/3107281840/yutian-panel@main/panel/index.html";
+    /** jsDelivr Fastly 节点，最后兜底（较慢）。 */
+    private static final String PANEL_FASTLY =
+            "https://fastly.jsdelivr.net/gh/3107281840/yutian-panel@main/panel/index.html";
 
-    private static final String[] PANEL_URLS = {PANEL_PAGES, PANEL_CDN, PANEL_RAW};
+    private static final String[] PANEL_URLS = {
+            PANEL_MIRROR, PANEL_PAGES, PANEL_GCORE, PANEL_FASTLY};
 
     private volatile boolean inBackground;
     private volatile long backgroundSince;

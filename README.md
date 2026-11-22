@@ -5,9 +5,10 @@
 - 应用名：**雨天面板**
 - 包名：`com.yutian.panel`
 - 面板在线地址：
+  - jsdmirror（国内镜像）：`https://cdn.jsdmirror.com/gh/3107281840/yutian-panel@main/panel/index.html`
   - GitHub Pages：<https://3107281840.github.io/yutian-panel/panel/index.html>
-  - jsDelivr（gcore）：`https://gcore.jsdelivr.net/gh/3107281840/yutian-panel@main/panel/index.html`
-  - 兜底（Cloudflare）：`https://testingcf.jsdelivr.net/gh/3107281840/yutian-panel@main/panel/index.html`
+  - jsDelivr gcore：`https://gcore.jsdelivr.net/gh/3107281840/yutian-panel@main/panel/index.html`
+  - jsDelivr Fastly：`https://fastly.jsdelivr.net/gh/3107281840/yutian-panel@main/panel/index.html`
 - 车模与网页源码：仓库根目录 `panel/`（与作者 H5 整包一致）
 
 > 本项目只是个人自用的第三方壳，与极核官方无关；面板网页与车模的作者、版权归原各自所有者。
@@ -16,7 +17,7 @@
 
 ```
 MainActivity
-  ├─ 依次尝试：GitHub Pages → jsDelivr gcore → jsDelivr Cloudflare
+  ├─ 依次尝试：jsdmirror → GitHub Pages → jsDelivr gcore → jsDelivr Fastly
   │     └─ PanelLoader 拉 index.html，注入桥脚本后交给 WebView
   │     └─ 车模 / 图片 / JSON 仍由 WebView 从同一个源直接加载（保持同源）
   └─ ZeehoNative（@JavascriptInterface）

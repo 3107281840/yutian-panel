@@ -22,8 +22,8 @@ import java.security.MessageDigest;
  */
 final class PanelLoader {
 
-    private static final int CONNECT_TIMEOUT = 12000;
-    private static final int READ_TIMEOUT = 45000;
+    private static final int CONNECT_TIMEOUT = 8000;
+    private static final int READ_TIMEOUT = 30000;
 
     private PanelLoader() {
     }
