@@ -9,10 +9,12 @@ import android.content.ClipData;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.graphics.Color;
+import android.graphics.drawable.GradientDrawable;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
+import android.view.Gravity;
 import android.view.View;
 import android.webkit.CookieManager;
 import android.webkit.GeolocationPermissions;
@@ -26,6 +28,7 @@ import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.FrameLayout;
+import android.widget.TextView;
 import android.widget.Toast;
 
 import java.util.Locale;
@@ -46,6 +49,9 @@ public class MainActivity extends Activity {
     private volatile long backgroundSince;
 
     private WebView webView;
+    private WebView ridesView;
+    private TextView ridesChip;
+    private FrameLayout rootView;
     private AssetServer assetServer;
     private ValueCallback<Uri[]> fileCallback;
     private GeolocationPermissions.Callback geoCallback;
@@ -59,10 +65,12 @@ public class MainActivity extends Activity {
         getWindow().setNavigationBarColor(Color.parseColor("#0A0A0C"));
 
         FrameLayout container = new FrameLayout(this);
+        rootView = container;
         container.setBackgroundColor(Color.parseColor("#0A0A0C"));
         webView = new WebView(this);
         container.addView(webView, new FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
+        buildRidesChip(container);
         setContentView(container);
 
         configureWebView();
@@ -335,9 +343,91 @@ public class MainActivity extends Activity {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
     }
 
+
+    private int dp(int value) {
+        return Math.round(value * getResources().getDisplayMetrics().density);
+    }
+
+    private void buildRidesChip(FrameLayout container) {
+        ridesChip = new TextView(this);
+        ridesChip.setText("轨迹");
+        ridesChip.setTextSize(13);
+        ridesChip.setTextColor(Color.WHITE);
+        ridesChip.setGravity(Gravity.CENTER);
+        ridesChip.setPadding(dp(14), dp(7), dp(14), dp(7));
+        GradientDrawable background = new GradientDrawable();
+        background.setColor(Color.parseColor("#CC1B1B22"));
+        background.setCornerRadius(dp(18));
+        background.setStroke(dp(1), Color.parseColor("#55FFFFFF"));
+        ridesChip.setBackground(background);
+        ridesChip.setElevation(dp(4));
+        FrameLayout.LayoutParams params = new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.WRAP_CONTENT,
+                FrameLayout.LayoutParams.WRAP_CONTENT,
+                Gravity.TOP | Gravity.END);
+        params.topMargin = dp(12);
+        params.rightMargin = dp(12);
+        container.addView(ridesChip, params);
+        ridesChip.setOnClickListener(v -> openRides());
+    }
+
+    private void openRides() {
+        if (ridesView != null || assetServer == null) {
+            return;
+        }
+        WebView view = new WebView(this);
+        WebSettings settings = view.getSettings();
+        settings.setJavaScriptEnabled(true);
+        settings.setDomStorageEnabled(true);
+        settings.setAllowFileAccess(false);
+        settings.setCacheMode(WebSettings.LOAD_DEFAULT);
+        settings.setMixedContentMode(WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE);
+        view.setBackgroundColor(Color.parseColor("#0A0A0C"));
+        view.addJavascriptInterface(new RidesBridge(this), "ZeehoRides");
+        view.setWebViewClient(new WebViewClient() {
+            @Override
+            public boolean shouldOverrideUrlLoading(WebView v, WebResourceRequest request) {
+                return handleUri(request.getUrl());
+            }
+
+            @Override
+            @SuppressWarnings("deprecation")
+            public boolean shouldOverrideUrlLoading(WebView v, String url) {
+                return handleUri(Uri.parse(url));
+            }
+        });
+        ridesView = view;
+        ridesChip.setVisibility(View.GONE);
+        rootView.addView(view, new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
+        view.loadUrl("http://127.0.0.1:" + assetServer.getPort() + "/rides.html");
+    }
+
+    void closeRides() {
+        if (ridesView == null) {
+            return;
+        }
+        if (rootView != null) {
+            rootView.removeView(ridesView);
+        }
+        try {
+            ridesView.loadUrl("about:blank");
+            ridesView.destroy();
+        } catch (Throwable ignored) {
+        }
+        ridesView = null;
+        if (ridesChip != null) {
+            ridesChip.setVisibility(View.VISIBLE);
+        }
+    }
+
     @Override
     @SuppressWarnings("deprecation")
     public void onBackPressed() {
+        if (ridesView != null) {
+            closeRides();
+            return;
+        }
         if (webView != null && webView.canGoBack()) {
             webView.goBack();
         } else {
@@ -376,6 +466,7 @@ public class MainActivity extends Activity {
 
     @Override
     protected void onDestroy() {
+        closeRides();
         if (assetServer != null) {
             assetServer.stop();
         }

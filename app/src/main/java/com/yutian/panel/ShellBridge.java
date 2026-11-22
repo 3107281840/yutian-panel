@@ -6,6 +6,7 @@ import android.content.ClipboardManager;
 import android.content.ContentValues;
 import android.content.Context;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.location.Location;
 import android.location.LocationListener;
@@ -30,7 +31,10 @@ import java.io.FileOutputStream;
 import java.io.OutputStream;
 import java.text.SimpleDateFormat;
 import java.util.Date;
+import java.util.Iterator;
 import java.util.Locale;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * 网页与原生的接口。
@@ -94,6 +98,9 @@ public final class ShellBridge {
     private boolean gpsRunning;
 
     private File logFile;
+
+    private static final AtomicLong STORE_SEQ = new AtomicLong();
+    private final ConcurrentHashMap<String, String> storeTickets = new ConcurrentHashMap<>();
 
     ShellBridge(MainActivity activity, android.webkit.WebView webView) {
         this.activity = activity;
@@ -276,6 +283,35 @@ public final class ShellBridge {
 
             case "setNotifyGroup":
                 return setNotifyGroup(args.optString(0, ""), args.optBoolean(1, false));
+
+            // ------------------------------------------------ 新增：原生键值存储（登录 token）
+
+            case "storeAll":
+            case "storeBootstrap":
+                return storeJson();
+
+            case "storeVersion":
+                return "2";
+
+            case "storePut":
+                storePut(args);
+                return "true";
+
+            case "storeRemove":
+                if (args.length() > 0) {
+                    storeRemove(args.optString(0, ""));
+                }
+                return "true";
+
+            case "storeCommit":
+                storeCommit(args);
+                return "true";
+
+            case "storeCommitBegin":
+                return storeCommitBegin(args);
+
+            case "storeCommitPoll":
+                return storeCommitPoll(args.optString(0, ""));
 
             default:
                 if (isKnown(method)) {
@@ -512,6 +548,134 @@ public final class ShellBridge {
             nm.deleteNotificationChannel(id);
         }
         return okObject().toString();
+    }
+
+
+    // ---------------------------------------------------------------- 原生键值存储
+
+    private SharedPreferences storePrefs() {
+        return activity.getSharedPreferences("zeeho_store", Context.MODE_PRIVATE);
+    }
+
+    private String storeJson() {
+        JSONObject out = new JSONObject();
+        try {
+            for (java.util.Map.Entry<String, ?> e : storePrefs().getAll().entrySet()) {
+                String key = e.getKey();
+                if (key == null || key.startsWith("__")) continue;
+                out.put(key, String.valueOf(e.getValue()));
+            }
+        } catch (Throwable ignored) {
+        }
+        return out.toString();
+    }
+
+    private void storePut(JSONArray args) {
+        try {
+            SharedPreferences.Editor editor = storePrefs().edit();
+            if (args.length() >= 2) {
+                String key = args.optString(0, "");
+                String value = args.optString(1, "");
+                if (!key.isEmpty()) {
+                    editor.putString(key, value);
+                    mirrorToWeb(key, value);
+                }
+            } else if (args.length() == 1) {
+                JSONObject object = new JSONObject(args.optString(0, "{}"));
+                Iterator<String> keys = object.keys();
+                while (keys.hasNext()) {
+                    String key = keys.next();
+                    String value = object.optString(key, "");
+                    editor.putString(key, value);
+                    mirrorToWeb(key, value);
+                }
+            }
+            editor.putInt("__v", storePrefs().getInt("__v", 0) + 1).commit();
+        } catch (Throwable ignored) {
+        }
+    }
+
+    private void storeRemove(String key) {
+        if (key == null || key.isEmpty()) return;
+        try {
+            storePrefs().edit().remove(key).putInt("__v", storePrefs().getInt("__v", 0) + 1).commit();
+            mirrorToWeb(key, "");
+        } catch (Throwable ignored) {
+        }
+    }
+
+    private void storeCommit(JSONArray args) {
+        if (args.length() == 0) return;
+        try {
+            JSONObject object = new JSONObject(args.optString(0, "{}"));
+            JSONObject puts = object.optJSONObject("puts");
+            JSONArray removes = object.optJSONArray("removes");
+            SharedPreferences.Editor editor = storePrefs().edit();
+            if (puts != null) {
+                Iterator<String> keys = puts.keys();
+                while (keys.hasNext()) {
+                    String key = keys.next();
+                    String value = puts.optString(key, "");
+                    editor.putString(key, value);
+                    mirrorToWeb(key, value);
+                }
+            }
+            if (removes != null) {
+                for (int i = 0; i < removes.length(); i++) {
+                    String key = removes.optString(i, "");
+                    if (!key.isEmpty()) {
+                        editor.remove(key);
+                        mirrorToWeb(key, "");
+                    }
+                }
+            }
+            editor.putInt("__v", storePrefs().getInt("__v", 0) + 1).commit();
+        } catch (Throwable ignored) {
+        }
+    }
+
+    private String storeCommitBegin(JSONArray args) {
+        String ticket = "ps-" + STORE_SEQ.incrementAndGet() + "-" + Long.toHexString(System.currentTimeMillis());
+        try {
+            storeCommit(args);
+            String done = storeReceipt(ticket, true, true, "");
+            storeTickets.put(ticket, done);
+            return storeReceipt(ticket, false, false, "");
+        } catch (Throwable t) {
+            String failed = storeReceipt(ticket, true, false, String.valueOf(t.getMessage()));
+            storeTickets.put(ticket, failed);
+            return storeReceipt(ticket, false, false, "");
+        }
+    }
+
+    private String storeCommitPoll(String ticket) {
+        String receipt = ticket == null ? null : storeTickets.remove(ticket);
+        return receipt != null ? receipt : storeReceipt(ticket, true, false, "unknown_ticket");
+    }
+
+    private static String storeReceipt(String ticket, boolean done, boolean ok, String error) {
+        JSONObject object = new JSONObject();
+        try {
+            object.put("ticket", ticket == null ? "" : ticket);
+            object.put("done", done);
+            object.put("ok", ok);
+            object.put("json", "");
+            object.put("error", error == null ? "" : error);
+        } catch (Throwable ignored) {
+        }
+        return object.toString();
+    }
+
+    private void mirrorToWeb(String key, String value) {
+        if (webView == null || key == null || key.isEmpty()) return;
+        final String script = "try{localStorage.setItem(" + JSONObject.quote(key) + ","
+                + JSONObject.quote(value == null ? "" : value) + ");}catch(e){}";
+        webView.post(() -> {
+            try {
+                webView.evaluateJavascript(script, null);
+            } catch (Throwable ignored) {
+            }
+        });
     }
 
     // ---------------------------------------------------------------- 工具
