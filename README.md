@@ -4,7 +4,7 @@
 
 - 应用名：**雨天面板**
 - 包名：`com.yutian.panel`
-- 版本：1.4.1
+- 版本：1.4.2
 - 内置面板：`app/src/main/assets/panel/`（index.html + 车模 + 图标）
 - 应用更新：GitHub Releases
 

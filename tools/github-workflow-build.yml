@@ -60,3 +60,16 @@ jobs:
           make_latest: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publish APK chunks
+        if: github.ref == 'refs/heads/main'
+        run: |
+          split -b 4194304 -d -a 2 dist/yutian-panel.apk /tmp/yutian-part.
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -B dist
+          git rm -rf . >/dev/null 2>&1 || true
+          cp /tmp/yutian-part.* .
+          git add -f yutian-part.*
+          git commit -m "APK chunks v$VERSION"
+          git push -f origin dist
