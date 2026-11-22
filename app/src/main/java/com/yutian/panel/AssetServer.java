@@ -95,6 +95,9 @@ final class AssetServer {
 
     private ServerSocket serverSocket;
     private int port;
+
+    /** 固定回环端口：localStorage 是按 origin 存的，端口一变登录态就丢。 */
+    private static final int PREFERRED_PORT = 18765;
     private volatile boolean running;
     private byte[] cachedIndex;
 
@@ -108,7 +111,13 @@ final class AssetServer {
     }
 
     void start() throws IOException {
-        serverSocket = new ServerSocket(0, 50, InetAddress.getByName("127.0.0.1"));
+        InetAddress loopback = InetAddress.getByName("127.0.0.1");
+        try {
+            serverSocket = new ServerSocket(PREFERRED_PORT, 50, loopback);
+        } catch (IOException busy) {
+            // 极少数情况下端口被占用，退回随机端口；正常启动始终是固定 origin。
+            serverSocket = new ServerSocket(0, 50, loopback);
+        }
         port = serverSocket.getLocalPort();
         running = true;
         Thread accept = new Thread(() -> {
