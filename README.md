@@ -61,15 +61,23 @@ echo "sdk.dir=/path/to/android-sdk" > local.properties
 # 产物：app/build/outputs/apk/release/app-release.apk
 ```
 
-## 用 GitHub Actions 构建（推荐）
+## 用 GitHub Actions 自动构建
 
-推到 `main` 就会自动：
+仓库里已经准备好工作流模板 `tools/github-workflow-build.yml`。启用只需一次（网页端 30 秒）：
+
+1. 在 GitHub 仓库页面点 `Add file` → `Create new file`；
+2. 文件名填 `.github/workflows/build.yml`；
+3. 把 `tools/github-workflow-build.yml` 的内容整段粘进去，提交。
+
+> 为什么没有直接推上去：当前登录用的 OAuth App 没有 `workflow` 权限，GitHub 会拒绝推送 `.github/workflows/*`。你也可以在授权里补上 `workflow` scope 后自己 `git push`。
+
+启用之后，推到 `main` 就会自动：
 
 1. 用 Gradle 7.6.4 + JDK 17 构建 `assembleRelease`；
 2. 把 APK 上传成 Actions artifact；
 3. 以 `v{versionName}` 为 tag 建一个 Release，附上 `yutian-panel.apk`。
 
-App 启动时会读 `https://api.github.com/repos/<GH_OWNER>/<GH_REPO>/releases/latest`，发现 tag 比当前版本新就弹窗提示下载，走系统下载器安装。
+App 启动时会读 `https://api.github.com/repos/<GH_OWNER>/<GH_REPO>/releases/latest`，发现 tag 比当前版本新就弹窗提示下载，走系统下载器安装。当前仓库已经手工发过 `v1.0.0`，应用内更新链路是通的。
 
 ## 改版本、发新版
 
